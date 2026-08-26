@@ -1,17 +1,49 @@
 #include <SPI.h>
 #include <MFRC522.h>
 
-// Pines lectores RFID
 #define SS_A_PIN 10
 #define RST_A_PIN 9
 #define SS_B_PIN 8
 #define RST_B_PIN 7
+#define BUZZER_PIN 5 
 
-// Pin para Feedback Sonoro
-#define BUZZER_PIN 5
+MFRC522 rfidA(SS_A_PIN, RST_A_PIN);
+MFRC522 rfidB(SS_B_PIN, RST_B_PIN);
 
 void setup() {
   Serial.begin(9600);
+  SPI.begin();
+  
+  // Pruebas de conexión
+  rfidA.PCD_Init();
+  rfidB.PCD_Init();
+
+  delay(500); //Tiempo de espera.
+
+  Serial.println("--- TEST DE DIAGNÓSTICO RFID ---");
+
+  // Prueba de comunicación con Lector A
+  byte vA = rfidA.PCD_ReadRegister(rfidA.VersionReg);
+  Serial.print("Lector A Versión de Firmware: 0x");
+  Serial.println(vA, HEX);
+  if (vA == 0x91 || vA == 0x92) {
+    Serial.println("Lector A: Conectado y respondiendo.");
+  } else {
+    Serial.println("Lector A: Error de conexión o cableado.");
+  }
+
+  // Prueba de comunicación con Lector B
+  byte vB = rfidB.PCD_ReadRegister(rfidB.VersionReg);
+  Serial.print("Lector B Versión de Firmware: 0x");
+  Serial.println(vB, HEX);
+  if (vB == 0x91 || vB == 0x92) {
+    Serial.println("Lector B: Conectado y respondiendo.");
+  } else {
+    Serial.println("Lector B: Error de conexión o cableado.");
+  }
+
+  // Inicializacióń del Buzzer
+  pinMode(BUZZER_PIN, OUTPUT);
 }
 
 void loop() {
@@ -20,6 +52,10 @@ void loop() {
   
   String uids[] = {"4A3B2C1D", "8F9E0D1C", "12345678"};
   int index = random(0, 3);
+
+  tone(BUZZER_PIN, 1000); // Emite un tono de 1000 Hz
+  delay(1000);            // Espera 1 segundo
+  noTone(BUZZER_PIN);     // Apaga el sonido
   
   // Alternar entre ENTRADA y SALIDA de forma aleatoria
   if (random(0, 2) == 0) {
