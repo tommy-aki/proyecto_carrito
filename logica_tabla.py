@@ -1,50 +1,85 @@
-import serial
-import pandas as pd
-import os
-
-PUERTO = '/dev/ttyUSB0'  # En Windows, usar COM3
-BAUDIOS = 9600
-ARCHIVO_TABLA = 'inventario.csv' # Pruebas con csv antes de crear la base de datos
-
-# Cargar o crear tabla inicial
-if os.path.exists(ARCHIVO_TABLA):
-    tabla = pd.read_csv(ARCHIVO_TABLA)
-else:
-    tabla = pd.DataFrame(columns=['UID', 'Estado', 'Ultima_Actualizacion'])
-
-def guardar_tabla():
-    tabla.to_csv(ARCHIVO_TABLA, index=False)
-    print("\n--- TABLA ACTUALIZADA ---")
-    print(tabla)
-    print("-------------------------\n")
+import argparse
+import sqlite3
 
 try:
-    arduino = serial.Serial(PUERTO, BAUDIOS, timeout=1)
-    print("Escuchando Arduino...")
+    import serial
+except ImportError:
+    serial = None
 
-    while True:
-        if arduino.in_waiting > 0:
-            linea = arduino.readline().decode('utf-8').strip()
+from database.database import inicializar_base_datos, obtener_conexion
+from database.operations import obtener_dispositivo, obtener_o_crear_sesion, procesar_rfid
+from database.seed import ejecutar_seed
 
-            if ":" in linea:
-                accion, uid = linea.split(":")
+PUERTO = "/dev/ttyUSB0"  # En Windows, usar COM3 o COM4.
+BAUDIOS = 9600
 
-                if accion == "ENTRADA":
-                    if uid not in tabla['UID'].values:
-                        nueva_fila = {'UID': uid, 'Estado': 'Dentro', 'Ultima_Actualizacion': pd.Timestamp.now()}
-                        tabla = pd.concat([tabla, pd.DataFrame([nueva_fila])], ignore_index=False)
-                        print(f"Producto {uid} INGRESADO a la tabla.")
-                    else:
-                        print(f"El producto {uid} ya figura en la tabla.")
 
-                elif accion == "SALIDA":
-                    if uid in tabla['UID'].values:
-                        tabla = tabla[tabla['UID'] != uid]  # Elimina el registro
-                        print(f"❌ Producto {uid} ELIMINADO de la tabla.")
-                    else:
-                        print(f"⚠️ El producto {uid} no está en la tabla para eliminar.")
+def procesar_linea(conexion, id_sesion, linea):
+    if ":" not in linea:
+        return None
+    accion, uid = (parte.strip() for parte in linea.split(":", 1))
+    accion = accion.upper()
+    uid = "".join(uid.split()).upper()
+    if accion not in ("ENTRADA", "SALIDA") or not uid:
+        return None
+    codigo = "RFID-A" if accion == "ENTRADA" else "RFID-B"
+    return procesar_rfid(conexion, id_sesion, obtener_dispositivo(conexion, codigo), accion, uid)
 
-                guardar_tabla()
 
-except KeyboardInterrupt:
-    print("\nPrograma finalizado.")
+def ejecutar_simulacion():
+    inicializar_base_datos()
+    ejecutar_seed()
+    with obtener_conexion() as conexion:
+        id_sesion = obtener_o_crear_sesion(conexion)
+        for linea in ("ENTRADA:4A3B2C1D", "ENTRADA:8F9E0D1C", "SALIDA:4A3B2C1D"):
+            try:
+                print(procesar_linea(conexion, id_sesion, linea))
+                conexion.commit()
+            except (sqlite3.Error, ValueError) as error:
+                conexion.rollback()
+                print(f"[SQLite] Lectura ignorada por error: {error}")
+        total = conexion.execute("SELECT total_calculado FROM sesiones_compra WHERE id_sesion = ?", (id_sesion,)).fetchone()[0]
+        print(f"Sesion {id_sesion}; total_calculado={total}")
+
+
+def escuchar_serial():
+    if serial is None:
+        raise RuntimeError("Falta pyserial. Instala dependencias con: pip install -r requirements.txt")
+    inicializar_base_datos()
+    ejecutar_seed()
+    with obtener_conexion() as conexion:
+        id_sesion = obtener_o_crear_sesion(conexion)
+        try:
+            arduino = serial.Serial(PUERTO, BAUDIOS, timeout=1)
+        except serial.SerialException as error:
+            raise RuntimeError(f"No se pudo abrir {PUERTO}: {error}") from error
+        print(f"Escuchando Arduino en {PUERTO} a {BAUDIOS} baudios...")
+        try:
+            while True:
+                if arduino.in_waiting:
+                    linea = arduino.readline().decode("utf-8", errors="replace").strip()
+                    try:
+                        mensaje = procesar_linea(conexion, id_sesion, linea)
+                        conexion.commit()
+                        if mensaje:
+                            print(mensaje)
+                    except (sqlite3.Error, ValueError) as error:
+                        conexion.rollback()
+                        print(f"[SQLite] Lectura ignorada por error: {error}")
+        except KeyboardInterrupt:
+            print("\nPrograma finalizado.")
+        finally:
+            arduino.close()
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Procesador RFID del carrito")
+    parser.add_argument("--simular", action="store_true", help="Procesa tres lecturas sin Arduino")
+    if parser.parse_args().simular:
+        ejecutar_simulacion()
+    else:
+        escuchar_serial()
+
+
+if __name__ == "__main__":
+    main()
