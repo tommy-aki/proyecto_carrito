@@ -13,30 +13,33 @@ MFRC522 rfidB(SS_B_PIN, RST_B_PIN);
 void setup() {
   Serial.begin(9600);
   SPI.begin();
+  SPI.setClockDivider(SPI_CLOCK_DIV4); 
   
   // Pruebas de conexión
   rfidA.PCD_Init();
   rfidB.PCD_Init();
 
-  delay(500); //Tiempo de espera.
+  delay(1000); //Tiempo de espera.
 
   Serial.println("--- TEST DE DIAGNÓSTICO RFID ---");
 
   // Prueba de comunicación con Lector A
+  rfidA.PCD_DumpVersionToSerial();
   byte vA = rfidA.PCD_ReadRegister(rfidA.VersionReg);
   Serial.print("Lector A Versión de Firmware: 0x");
   Serial.println(vA, HEX);
-  if (vA == 0x91 || vA == 0x92) {
+  if (vA == 0xB2) {
     Serial.println("Lector A: Conectado y respondiendo.");
   } else {
     Serial.println("Lector A: Error de conexión o cableado.");
   }
 
+
   // Prueba de comunicación con Lector B
   byte vB = rfidB.PCD_ReadRegister(rfidB.VersionReg);
   Serial.print("Lector B Versión de Firmware: 0x");
   Serial.println(vB, HEX);
-  if (vB == 0x91 || vB == 0x92) {
+  if (vB == 0xB2) {
     Serial.println("Lector B: Conectado y respondiendo.");
   } else {
     Serial.println("Lector B: Error de conexión o cableado.");
@@ -54,7 +57,7 @@ void loop() {
   int index = random(0, 3);
 
   tone(BUZZER_PIN, 1000); // Emite un tono de 1000 Hz
-  delay(1000);            // Espera 1 segundo
+  delay(200);            // Espera 1 segundo
   noTone(BUZZER_PIN);     // Apaga el sonido
   
   // Alternar entre ENTRADA y SALIDA de forma aleatoria
