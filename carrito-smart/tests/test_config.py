@@ -68,6 +68,19 @@ def test_vision_defaults_are_centralized(monkeypatch, tmp_path):
     assert config.yoloe_chocolate_retention_threshold == 0.25
 
 
+def test_removed_pen_prompt_is_ignored(monkeypatch):
+    monkeypatch.setenv("CARRITO_SMART_YOLOE_PEN_PROMPT", "ballpoint pen")
+
+    config = AppConfig.from_env()
+
+    assert config.yoloe_prompts == (
+        config.yoloe_water_bottle_prompt.strip(),
+        config.yoloe_soda_can_prompt.strip(),
+        config.yoloe_chocolate_bar_prompt.strip(),
+    )
+    assert "yoloe_pen_prompt" not in config.__dataclass_fields__
+
+
 def test_chocolate_thresholds_are_configurable_and_independent(monkeypatch):
     monkeypatch.setenv("CARRITO_SMART_YOLOE_CHOCOLATE_DETECTION_THRESHOLD", "0.35")
     monkeypatch.setenv("CARRITO_SMART_YOLOE_CHOCOLATE_RETENTION_THRESHOLD", "0.20")

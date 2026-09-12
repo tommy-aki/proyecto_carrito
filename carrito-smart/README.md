@@ -3,8 +3,8 @@
 > Aplicación de escritorio del equipo, independiente del programa de la raíz.
 > Para instalar desde este repositorio y revisar las limitaciones conocidas de
 > esta publicación, consulte [la guía del equipo](docs/REPOSITORIO_GRUPO.md).
-> Verificación del 2026-09-11: **115 pruebas aprobadas y 4 fallidas**; se conserva
-> el estado local sin corregir ni ocultar los fallos de configuración de visión.
+> Verificación del 2026-09-11: **121 pruebas aprobadas, ninguna fallida**.
+> Se retiró la pluma y se corrigió la asignación del umbral del chocolate.
 
 Primer avance funcional de un carrito de compras inteligente. El prototipo combina
 una interfaz de escritorio, inventario y ventas en SQLite, eventos RFID desde

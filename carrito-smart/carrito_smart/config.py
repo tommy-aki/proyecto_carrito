@@ -38,7 +38,6 @@ class AppConfig:
     vision_soda_can_sku: str = "CS-002"
     yoloe_water_bottle_prompt: str = "plastic water bottle"
     yoloe_soda_can_prompt: str = "aluminum soda can"
-    yoloe_pen_prompt: str = "ballpoint pen"
     yoloe_detection_threshold: float = 0.45
     yoloe_retention_threshold: float = 0.25
     secondary_fallback_yolo_model: str = "yolo11n.pt"
@@ -175,9 +174,6 @@ class AppConfig:
                 "CARRITO_SMART_YOLOE_SODA_CAN_PROMPT",
                 "aluminum soda can",
             ),
-            yoloe_pen_prompt=os.getenv(
-                "CARRITO_SMART_YOLOE_PEN_PROMPT", "ballpoint pen"
-            ),
             yoloe_chocolate_bar_prompt=os.getenv(
                 "CARRITO_SMART_YOLOE_CHOCOLATE_BAR_PROMPT", "packet of chocolate"
             ),
@@ -210,7 +206,6 @@ class AppConfig:
         return (
             self.yoloe_water_bottle_prompt.strip(),
             self.yoloe_soda_can_prompt.strip(),
-            self.yoloe_pen_prompt.strip(),
             self.yoloe_chocolate_bar_prompt.strip(),
         )
 

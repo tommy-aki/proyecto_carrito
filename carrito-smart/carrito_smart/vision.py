@@ -411,7 +411,7 @@ class InferenceWorker(QObject):
         if not self._is_yoloe_model(model_name):
             return {}
         return {
-            self.config.yoloe_prompts[2]: (
+            self.config.yoloe_chocolate_bar_prompt.strip(): (
                 self.config.yoloe_chocolate_detection_threshold,
                 self.config.yoloe_chocolate_retention_threshold,
             )

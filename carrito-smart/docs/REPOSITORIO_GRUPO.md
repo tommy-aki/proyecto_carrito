@@ -1,8 +1,9 @@
 # Carrito Smart en el repositorio del equipo
 
-Publicación: 2026-09-11. Código local copiado sin cambios funcionales a
-`carrito-smart/`. Los archivos, firmware, historial y base de datos del proyecto
-original de la raíz se mantienen intactos. No se fusionaron sus esquemas SQLite.
+Publicación y corrección de visión: 2026-09-11. Aplicación local en
+`carrito-smart/`, con la pluma retirada y el umbral del chocolate corregido.
+Los archivos, firmware, historial y base de datos del proyecto original de la raíz
+se mantienen intactos. No se fusionaron sus esquemas SQLite.
 
 ## Instalación en otra PC (PowerShell)
 
@@ -79,34 +80,34 @@ verificadas en la laptop al publicar, sin importar sus ventas ni su inventario:
 Cada UID representa una unidad física. Registrar una etiqueta no añade una unidad
 al carrito: las entradas siguen requiriendo concordancia entre RFID y cámara.
 
-## Verificación y limitación conocida de esta publicación
+## Verificación y corrección de visión
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest
 ```
 
-Resultado antes de publicar: **115 aprobadas, 4 fallidas, 119 en total**. No se
-modificaron las pruebas ni el código para disimular esos fallos.
+Resultado tras corregir: **121 aprobadas, ninguna fallida**. Las 119 pruebas
+existentes se conservan y se agregaron dos pruebas de regresión. Ambas pruebas
+nuevas reprodujeron el problema antes de aplicar la corrección.
 
-El estado local incluye `ballpoint pen` antes de `packet of chocolate` en
-`AppConfig.yoloe_prompts`. Esto añade una cuarta clase y desplaza el chocolate de
-la posición 2 a la 3. `InferenceWorker._class_thresholds_for_model` todavía usa
-`yoloe_prompts[2]`, por lo que el umbral específico del chocolate se aplica al
-bolígrafo. Es un problema pendiente real: el chocolate queda con el umbral general
-y puede ser más difícil confirmarlo. El bolígrafo no tiene un producto asociado
-en el carrito. Las referencias a tres textos en el README describen la integración
-anterior; no reflejan esa cuarta clase añadida en el estado local publicado.
+La publicación inicial tenía cuatro fallos porque `ballpoint pen` desplazaba al
+chocolate en la lista y recibía su umbral. Se retiraron esa clase y su variable de
+configuración; una variable antigua `CARRITO_SMART_YOLOE_PEN_PROMPT` ya no tiene
+efecto. Se mantienen únicamente:
 
-Fallos observados:
+- `plastic water bottle`: botella de agua, `CS-001`, aceptación 0.45/retención 0.25.
+- `aluminum soda can`: lata de refresco, `CS-002`, aceptación 0.45/retención 0.25.
+- `packet of chocolate`: chocolate, `CS-006`, aceptación 0.30/retención 0.25.
 
-- `tests/test_config.py::test_vision_defaults_are_centralized`
-- `tests/test_vision.py::test_loader_configures_yoloe_with_three_product_prompts`
-- `tests/test_vision.py::test_yoloe_and_coco_models_use_separate_thresholds`
-- `tests/test_vision.py::test_worker_applies_chocolate_override_and_lowest_prediction_floor`
+El umbral especial ahora se vincula a `yoloe_chocolate_bar_prompt.strip()`, no al
+índice de una lista. Las nuevas pruebas verifican que una reordenación futura y
+espacios en el texto no transfieran el umbral a otro producto, y que la antigua
+variable de la pluma no vuelva a introducir una cuarta clase.
 
-Esta publicación conserva el avance solicitado; no es una certificación de
-funcionamiento completo ni una corrección de visión. No se hizo una nueva prueba
-física con webcam/Arduino durante la subida.
+No se cambiaron modelo, Python, dependencias, stock, RFID ni la lógica de pago.
+Se conservan las tres confirmaciones consecutivas, EMA y tolerancia existentes.
+Las pruebas usan datos aislados y detecciones simuladas: no se hizo una nueva
+prueba física con webcam/Arduino ni se garantiza precisión con toda envoltura.
 
 ## Qué queda fuera de Git
 

@@ -140,6 +140,25 @@ def test_yoloe_and_coco_models_use_separate_thresholds(tmp_path):
     assert worker._class_thresholds_for_model("yolo11n.pt") == {}
 
 
+def test_chocolate_threshold_uses_named_prompt_not_position(monkeypatch, tmp_path):
+    config = replace(
+        AppConfig.from_env(), data_dir=tmp_path,
+        yoloe_chocolate_bar_prompt="  custom wrapped chocolate  ",
+    )
+    # Una futura reordenación no debe transferir el umbral a otro producto.
+    monkeypatch.setattr(AppConfig, "yoloe_prompts", property(lambda self: (
+        self.yoloe_chocolate_bar_prompt.strip(),
+        self.yoloe_water_bottle_prompt.strip(),
+        self.yoloe_soda_can_prompt.strip(),
+    )))
+    worker = InferenceWorker(config, LatestFrameBuffer(), StableDetectionBuffer())
+
+    assert worker._class_thresholds_for_model("yoloe-26n-seg.pt") == {
+        "custom wrapped chocolate": (0.30, 0.25)
+    }
+    assert worker._class_thresholds_for_model("yolo26n.pt") == {}
+
+
 def test_worker_applies_chocolate_override_and_lowest_prediction_floor(monkeypatch, tmp_path):
     import sys
 
