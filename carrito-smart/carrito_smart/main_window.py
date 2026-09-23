@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -31,6 +32,7 @@ from PySide6.QtWidgets import (
 from carrito_smart.cart import CartService
 from carrito_smart.config import AppConfig
 from carrito_smart.database import Database, InventoryError, SaleValidationError
+from carrito_smart.manager_dashboard import ManagerDashboardWindow
 from carrito_smart.models import format_money
 from carrito_smart.receipt_dialog import ReceiptDialog
 from carrito_smart.rfid import (
@@ -46,8 +48,6 @@ from carrito_smart.vision import (
     StableDetectionBuffer,
 )
 from carrito_smart.sensor_fusion import SensorFusionCoordinator
-from carrito_smart.manager_dashboard import ManagerDashboardWindow
-from carrito_smart.paypal_demo import PayPalDemoDialog
 
 
 LOGGER = logging.getLogger(__name__)
@@ -82,11 +82,10 @@ class MainWindow(QMainWindow):
         self._rfid_thread: QThread | None = None
         self._rfid_worker: RfidSerialWorker | None = None
         self._vision_metrics: dict[str, object] = {}
-        self._manager_window: ManagerDashboardWindow | None = None
 
-        self.setWindowTitle("Carrito Smart · Prototipo")
-        self.resize(1280, 760)
-        self.setMinimumSize(1050, 650)
+        self.setWindowTitle("Carrito Smart")
+        self.resize(1360, 820)
+        self.setMinimumSize(1180, 760)
         self._build_ui()
         self._apply_styles()
         self._load_products()
@@ -101,89 +100,187 @@ class MainWindow(QMainWindow):
 
     def _build_ui(self) -> None:
         central = QWidget()
-        root = QHBoxLayout(central)
-        root.setContentsMargins(18, 18, 18, 18)
-        root.setSpacing(18)
+        central.setObjectName("appBackground")
+        page = QVBoxLayout(central)
+        page.setContentsMargins(22, 20, 22, 20)
+        page.setSpacing(18)
 
-        vision_panel = QVBoxLayout()
-        title = QLabel("Visión del carrito")
+        header = QFrame()
+        header.setObjectName("appHeader")
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(18, 14, 18, 14)
+        header_layout.setSpacing(14)
+
+        brand = QLabel("CS")
+        brand.setObjectName("brandMark")
+        brand.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        header_layout.addWidget(brand)
+
+        heading = QVBoxLayout()
+        heading.setSpacing(2)
+        app_title = QLabel("Carrito Smart")
+        app_title.setObjectName("appTitle")
+        app_subtitle = QLabel("Compra asistida por RFID y visión")
+        app_subtitle.setObjectName("appSubtitle")
+        heading.addWidget(app_title)
+        heading.addWidget(app_subtitle)
+        header_layout.addLayout(heading)
+        header_layout.addStretch()
+
+        self.manager_button = QPushButton("Centro gerencial")
+        self.manager_button.setObjectName("managerButton")
+        self.manager_button.setMinimumHeight(36)
+        header_layout.addWidget(self.manager_button)
+
+        workflow_chip = QLabel("RFID + CÁMARA")
+        workflow_chip.setObjectName("workflowChip")
+        header_layout.addWidget(workflow_chip)
+        page.addWidget(header)
+
+        content = QHBoxLayout()
+        content.setSpacing(18)
+
+        vision_card = QFrame()
+        vision_card.setObjectName("panelCard")
+        vision_panel = QVBoxLayout(vision_card)
+        vision_panel.setContentsMargins(18, 18, 18, 18)
+        vision_panel.setSpacing(12)
+
+        vision_heading = QHBoxLayout()
+        vision_titles = QVBoxLayout()
+        vision_titles.setSpacing(2)
+        title = QLabel("Cámara y validación")
         title.setObjectName("sectionTitle")
-        vision_panel.addWidget(title)
+        title_help = QLabel("Seguimiento visual de los productos dentro del carrito")
+        title_help.setObjectName("sectionSubtitle")
+        vision_titles.addWidget(title)
+        vision_titles.addWidget(title_help)
+        vision_heading.addLayout(vision_titles)
+        vision_heading.addStretch()
+        self.vision_status = QLabel("Inicializando")
+        self.vision_status.setObjectName("statusPill")
+        vision_heading.addWidget(self.vision_status, alignment=Qt.AlignmentFlag.AlignTop)
+        vision_panel.addLayout(vision_heading)
 
         self.video_label = QLabel("Preparando cámara…")
         self.video_label.setObjectName("video")
         self.video_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.video_label.setMinimumSize(620, 420)
+        self.video_label.setMinimumSize(560, 350)
+        self.video_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         vision_panel.addWidget(self.video_label, 1)
 
-        status_row = QHBoxLayout()
-        self.vision_status = QLabel("Inicializando")
-        self.vision_status.setObjectName("statusPill")
+        camera_meta = QHBoxLayout()
         self.detection_count = QLabel("0 detecciones")
-        status_row.addWidget(self.vision_status)
-        status_row.addStretch()
-        status_row.addWidget(self.detection_count)
-        vision_panel.addLayout(status_row)
-
+        self.detection_count.setObjectName("metricBadge")
+        camera_meta.addWidget(self.detection_count)
+        camera_meta.addStretch()
         self.performance_label = QLabel(
-            f"Captura ≤ {self.config.camera_fps:.0f} FPS · "
-            f"YOLO ≤ {self.config.inference_fps:.0f} FPS · "
-            f"Texto ≤ {self.config.ui_update_fps:.0f} FPS"
+            f"Cámara ≤ {self.config.camera_fps:.0f} FPS · "
+            f"Detección ≤ {self.config.inference_fps:.0f} FPS"
         )
-        self.performance_label.setStyleSheet("color: #52667a; font-size: 12px;")
-        vision_panel.addWidget(self.performance_label)
+        self.performance_label.setObjectName("metaText")
+        camera_meta.addWidget(self.performance_label)
+        vision_panel.addLayout(camera_meta)
 
-        detections_group = QGroupBox("Clases detectadas y confianza")
-        detections_layout = QVBoxLayout(detections_group)
         self.detection_list = QListWidget()
-        self.detection_list.setMaximumHeight(125)
+        self.detection_list.setVisible(False)
+        self.detection_list.setMaximumHeight(0)
         self.detection_list.addItem("Aún no hay detecciones")
-        detections_layout.addWidget(self.detection_list)
-        vision_panel.addWidget(detections_group)
 
+        cart_card = QFrame()
+        cart_card.setObjectName("panelCard")
+        cart_panel = QVBoxLayout(cart_card)
+        cart_panel.setContentsMargins(18, 18, 18, 18)
+        cart_panel.setSpacing(12)
+
+        cart_heading = QHBoxLayout()
+        cart_titles = QVBoxLayout()
+        cart_titles.setSpacing(2)
+        cart_title = QLabel("Tu compra")
+        cart_title.setObjectName("sectionTitle")
+        self.cart_summary_label = QLabel("0 productos")
+        self.cart_summary_label.setObjectName("sectionSubtitle")
+        cart_titles.addWidget(cart_title)
+        cart_titles.addWidget(self.cart_summary_label)
+        cart_heading.addLayout(cart_titles)
+        cart_heading.addStretch()
+        cart_panel.addLayout(cart_heading)
+
+        simulator = QGroupBox("Control RFID")
+        simulator.setObjectName("rfidGroup")
+        simulator_layout = QGridLayout(simulator)
+        simulator_layout.setContentsMargins(14, 16, 14, 12)
+        simulator_layout.setHorizontalSpacing(10)
+        simulator_layout.setVerticalSpacing(12)
+
+        self.product_combo = QComboBox(simulator)
+        self.product_combo.setMinimumWidth(300)
+        self.product_combo.setMinimumHeight(34)
+        self.product_combo.setVisible(False)
+        self.add_button = QPushButton("Registrar entrada", simulator)
+        self.add_button.setObjectName("primaryButton")
+        self.add_button.setMinimumHeight(38)
+        self.add_button.setVisible(False)
+        self.remove_button = QPushButton("Registrar salida", simulator)
+        self.remove_button.setObjectName("secondaryButton")
+        self.remove_button.setMinimumHeight(38)
+        self.remove_button.setVisible(False)
+
+        divider = QFrame()
+        divider.setObjectName("sectionDivider")
+        divider.setFrameShape(QFrame.Shape.HLine)
+        simulator_layout.addWidget(divider, 0, 0, 1, 2)
+
+        self.rfid_status = QLabel("Lector RFID: inicializando…")
+        self.rfid_status.setObjectName("deviceStatus")
+        self.rfid_status.setWordWrap(True)
+        self.rfid_status.setMinimumHeight(28)
+        simulator_layout.addWidget(self.rfid_status, 1, 0, 1, 2)
+
+        self.serial_line_input = QLineEdit()
+        self.serial_line_input.setPlaceholderText("ENTRADA:UID o SALIDA:UID")
+        self.serial_line_input.setMinimumHeight(34)
+        self.serial_line_input.setVisible(False)
+        self.serial_simulate_button = QPushButton("Procesar lectura")
+        self.serial_simulate_button.setMinimumHeight(34)
+        self.serial_simulate_button.setVisible(False)
+
+        self.rfid_last_event = QLabel("Sin lecturas RFID")
+        self.rfid_last_event.setObjectName("lastEvent")
+        self.rfid_last_event.setWordWrap(True)
+        self.rfid_last_event.setVisible(False)
+
+        self.rfid_simulation = QCheckBox("Modo manual sin lector")
+        self.rfid_simulation.setChecked(not self.config.rfid_enabled)
+        self.rfid_simulation.setVisible(False)
+        simulator_layout.addWidget(self.rfid_simulation, 2, 0, 1, 2)
+
+        validation_card = QFrame()
+        validation_card.setObjectName("validationCard")
+        validation_layout = QVBoxLayout(validation_card)
+        validation_layout.setContentsMargins(14, 12, 14, 12)
+        validation_layout.setSpacing(8)
+        validation_caption = QLabel("Estado de validación")
+        validation_caption.setObjectName("eyebrow")
+        validation_badge = QLabel("RFID + visión")
+        validation_badge.setObjectName("validationBadge")
+        title_row = QHBoxLayout()
+        title_row.addWidget(validation_caption)
+        title_row.addStretch()
+        title_row.addWidget(validation_badge)
         self.vision_cart_status = QLabel(
             "Entrada: aparición nueva + RFID · Salida: solo RFID"
         )
-        self.vision_cart_status.setStyleSheet("color: #334155; font-size: 12px;")
+        self.vision_cart_status.setObjectName("validationText")
         self.vision_cart_status.setWordWrap(True)
-        vision_panel.addWidget(self.vision_cart_status)
+        validation_layout.addLayout(title_row)
+        validation_layout.addWidget(self.vision_cart_status)
+        cart_panel.addWidget(validation_card)
 
-        cart_panel = QVBoxLayout()
-        cart_header = QHBoxLayout()
-        cart_title = QLabel("Compra actual")
-        cart_title.setObjectName("sectionTitle")
-        cart_header.addWidget(cart_title)
-        cart_header.addStretch()
-        self.manager_button = QPushButton("Centro gerencial · DEMO")
-        self.manager_button.setObjectName("managerButton")
-        cart_header.addWidget(self.manager_button)
-        cart_panel.addLayout(cart_header)
-
-        simulator = QGroupBox("Entrada: RFID + cámara · Salida: solo RFID")
-        simulator_layout = QGridLayout(simulator)
-        self.product_combo = QComboBox()
-        self.product_combo.setMinimumWidth(320)
-        simulator_layout.addWidget(QLabel("Producto"), 0, 0, 1, 2)
-        simulator_layout.addWidget(self.product_combo, 1, 0, 1, 2)
-        self.rfid_status = QLabel("Arduino: inicializando…")
-        self.rfid_status.setStyleSheet("color: #52667a; font-size: 12px;")
-        simulator_layout.addWidget(self.rfid_status, 3, 0, 1, 2)
-        simulator_layout.addWidget(QLabel("Probar trama sin Arduino"), 4, 0, 1, 2)
-        self.serial_line_input = QLineEdit("ENTRADA:4A3B2C1D")
-        self.serial_line_input.setPlaceholderText("ENTRADA:UID o SALIDA:UID")
-        self.serial_simulate_button = QPushButton("Procesar trama")
-        simulator_layout.addWidget(self.serial_line_input, 5, 0)
-        simulator_layout.addWidget(self.serial_simulate_button, 5, 1)
-        self.rfid_last_event = QLabel("Sin eventos RFID")
-        self.rfid_last_event.setWordWrap(True)
-        self.rfid_last_event.setStyleSheet("color: #334155; font-size: 12px;")
-        simulator_layout.addWidget(self.rfid_last_event, 6, 0, 1, 2)
-        self.rfid_simulation = QCheckBox("Modo de prueba sin Arduino (webcam para entradas)")
-        self.rfid_simulation.setChecked(not self.config.rfid_enabled)
-        simulator_layout.addWidget(self.rfid_simulation, 7, 0, 1, 2)
         cart_panel.addWidget(simulator)
 
         self.cart_table = QTableWidget(0, 4)
+        self.cart_table.setObjectName("cartTable")
         self.cart_table.setHorizontalHeaderLabels(
             ["Producto", "Cant.", "Precio", "Subtotal"]
         )
@@ -194,17 +291,22 @@ class MainWindow(QMainWindow):
             QAbstractItemView.SelectionMode.SingleSelection
         )
         self.cart_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.cart_table.setAlternatingRowColors(True)
         self.cart_table.verticalHeader().setVisible(False)
-        header = self.cart_table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.cart_table.setMinimumHeight(140)
+        header_view = self.cart_table.horizontalHeader()
+        header_view.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         for column in range(1, 4):
-            header.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
+            header_view.setSectionResizeMode(column, QHeaderView.ResizeMode.ResizeToContents)
         cart_panel.addWidget(self.cart_table, 1)
 
         total_frame = QFrame()
         total_frame.setObjectName("totalFrame")
         total_layout = QHBoxLayout(total_frame)
-        total_layout.addWidget(QLabel("TOTAL"))
+        total_layout.setContentsMargins(16, 12, 16, 12)
+        total_caption = QLabel("Total")
+        total_caption.setObjectName("totalCaption")
+        total_layout.addWidget(total_caption)
         total_layout.addStretch()
         self.total_label = QLabel(format_money(0))
         self.total_label.setObjectName("totalLabel")
@@ -212,30 +314,29 @@ class MainWindow(QMainWindow):
         cart_panel.addWidget(total_frame)
 
         actions = QHBoxLayout()
+        actions.setSpacing(9)
         self.clear_button = QPushButton("Cancelar compra")
-        self.paypal_button = QPushButton("PayPal · DEMO")
-        self.paypal_button.setObjectName("paypalButton")
-        self.pay_button = QPushButton("Simular pago aprobado")
+        self.clear_button.setObjectName("dangerButton")
+        self.clear_button.setMinimumHeight(40)
+        self.pay_button = QPushButton("Confirmar pago")
         self.pay_button.setObjectName("payButton")
+        self.pay_button.setMinimumHeight(40)
         actions.addWidget(self.clear_button)
-        actions.addWidget(self.paypal_button)
         actions.addWidget(self.pay_button, 1)
         cart_panel.addLayout(actions)
 
-        left_widget = QWidget()
-        left_widget.setLayout(vision_panel)
-        right_widget = QWidget()
-        right_widget.setLayout(cart_panel)
-        root.addWidget(left_widget, 3)
-        root.addWidget(right_widget, 2)
+        content.addWidget(vision_card, 3)
+        content.addWidget(cart_card, 2)
+        page.addLayout(content, 1)
         self.setCentralWidget(central)
 
+        self.add_button.clicked.connect(self._simulate_entry)
+        self.remove_button.clicked.connect(self._simulate_exit)
         self.serial_simulate_button.clicked.connect(self._simulate_serial_line)
         self.serial_line_input.returnPressed.connect(self._simulate_serial_line)
         self.clear_button.clicked.connect(self._clear_cart)
-        self.paypal_button.clicked.connect(self._show_paypal_demo)
-        self.manager_button.clicked.connect(self._show_manager_dashboard)
         self.pay_button.clicked.connect(self._pay)
+        self.manager_button.clicked.connect(self._open_manager_dashboard)
         self.cart_table.itemSelectionChanged.connect(self._sync_combo_to_selection)
         self.rfid_simulation.toggled.connect(self._simulation_changed)
         self.statusBar().showMessage("Listo")
@@ -243,31 +344,281 @@ class MainWindow(QMainWindow):
     def _apply_styles(self) -> None:
         self.setStyleSheet(
             """
-            QMainWindow, QWidget { background: #f3f5f7; color: #17212b; font-size: 14px; }
-            QLabel#sectionTitle { font-size: 23px; font-weight: 700; color: #102a43; }
-            QLabel#video { background: #0c1117; color: #91a3b5; border-radius: 10px; }
-            QLabel#statusPill { background: #e0f2fe; color: #075985; padding: 6px 10px; border-radius: 8px; }
-            QGroupBox { background: white; border: 1px solid #d9e2ec; border-radius: 8px; margin-top: 12px; padding-top: 12px; font-weight: 600; }
-            QGroupBox::title { subcontrol-origin: margin; left: 12px; padding: 0 5px; }
-            QComboBox, QTableWidget, QListWidget { background: white; border: 1px solid #cbd5e1; border-radius: 6px; padding: 7px; }
-            QPushButton { background: #e2e8f0; border: none; border-radius: 6px; padding: 10px 14px; font-weight: 600; }
-            QPushButton:hover { background: #cbd5e1; }
-            QPushButton#primaryButton { background: #2563eb; color: white; }
-            QPushButton#primaryButton:hover { background: #1d4ed8; }
-            QPushButton#payButton { background: #16a34a; color: white; font-size: 15px; }
-            QPushButton#managerButton { background: #102a43; color: white; padding: 8px 12px; }
-            QPushButton#managerButton:hover { background: #173f63; }
-            QPushButton#paypalButton { background: #0070ba; color: white; padding: 10px 12px; }
-            QPushButton#paypalButton:hover { background: #005ea6; }
-            QPushButton#payButton:hover { background: #15803d; }
-            QPushButton:disabled { background: #cbd5e1; color: #64748b; }
-            QPushButton#payButton:disabled, QPushButton#primaryButton:disabled { background: #cbd5e1; color: #64748b; }
-            QFrame#totalFrame { background: #102a43; border-radius: 8px; }
-            QFrame#totalFrame QLabel { background: transparent; color: white; font-weight: 700; }
-            QLabel#totalLabel { font-size: 25px; }
-            QHeaderView::section { background: #e8edf2; border: none; padding: 8px; font-weight: 700; }
+            QMainWindow {
+                background: #eef3f8;
+            }
+            QWidget#appBackground {
+                background: #eef3f8;
+                color: #162235;
+                font-size: 14px;
+            }
+            QFrame#appHeader {
+                background: #ffffff;
+                border: 1px solid #dbe5ef;
+                border-radius: 14px;
+            }
+            QLabel#brandMark {
+                background: #0f67d8;
+                color: #ffffff;
+                border-radius: 20px;
+                min-width: 40px;
+                max-width: 40px;
+                min-height: 40px;
+                max-height: 40px;
+                font-size: 16px;
+                font-weight: 800;
+            }
+            QLabel#appTitle {
+                color: #102a43;
+                font-size: 21px;
+                font-weight: 800;
+            }
+            QLabel#appSubtitle, QLabel#sectionSubtitle {
+                color: #6b7c93;
+                font-size: 12px;
+            }
+            QLabel#workflowChip {
+                background: #eef6ff;
+                color: #0f67d8;
+                border: 1px solid #cfe4ff;
+                border-radius: 9px;
+                padding: 7px 10px;
+                font-size: 11px;
+                font-weight: 800;
+            }
+            QPushButton#managerButton {
+                background: #edf8f2;
+                color: #166a43;
+                border: 1px solid #bfe4ca;
+                border-radius: 9px;
+                padding: 8px 14px;
+                min-height: 30px;
+                font-weight: 800;
+            }
+            QPushButton#managerButton:hover {
+                background: #e2f3ea;
+            }
+            QFrame#panelCard {
+                background: #ffffff;
+                border: 1px solid #dbe5ef;
+                border-radius: 16px;
+            }
+            QLabel#sectionTitle {
+                color: #102a43;
+                font-size: 22px;
+                font-weight: 800;
+            }
+            QLabel#video {
+                background: #0d1724;
+                color: #8ea2b8;
+                border: 1px solid #1f3044;
+                border-radius: 12px;
+                padding: 4px;
+            }
+            QLabel#statusPill {
+                background: #e9f7ef;
+                color: #177245;
+                border: 1px solid #ccebd9;
+                border-radius: 10px;
+                padding: 6px 10px;
+                font-size: 12px;
+                font-weight: 700;
+            }
+            QLabel#metricBadge {
+                background: #f3f6fa;
+                color: #42566c;
+                border: 1px solid #dbe5ef;
+                border-radius: 9px;
+                padding: 5px 9px;
+                font-size: 12px;
+                font-weight: 700;
+            }
+            QLabel#metaText, QLabel#deviceStatus, QLabel#lastEvent {
+                color: #60758a;
+                font-size: 11px;
+            }
+            QGroupBox#compactGroup, QGroupBox#rfidGroup {
+                background: #fbfcfe;
+                border: 1px solid #dbe5ef;
+                border-radius: 11px;
+                margin-top: 11px;
+                padding-top: 8px;
+                color: #2b4057;
+                font-weight: 800;
+            }
+            QGroupBox#compactGroup::title, QGroupBox#rfidGroup::title {
+                subcontrol-origin: margin;
+                left: 12px;
+                padding: 0 5px;
+                color: #2b4057;
+            }
+            QFrame#sectionDivider {
+                background: #dbe5ef;
+                max-height: 1px;
+                border: none;
+            }
+            QListWidget, QTableWidget {
+                background: #ffffff;
+                color: #1f2f42;
+                border: 1px solid #dbe5ef;
+                border-radius: 9px;
+                gridline-color: #edf1f5;
+                selection-background-color: #e7f1ff;
+                selection-color: #102a43;
+                outline: none;
+            }
+            QListWidget {
+                padding: 5px;
+            }
+            QTableWidget#cartTable {
+                alternate-background-color: #f8fafc;
+            }
+            QHeaderView::section {
+                background: #f3f6fa;
+                color: #4b6076;
+                border: none;
+                border-bottom: 1px solid #dbe5ef;
+                padding: 9px 8px;
+                font-size: 11px;
+                font-weight: 800;
+            }
+            QFrame#validationCard {
+                background: #f5f9ff;
+                border: 1px solid #d9e9ff;
+                border-radius: 10px;
+            }
+            QLabel#eyebrow {
+                color: #0f67d8;
+                font-size: 10px;
+                font-weight: 800;
+            }
+            QLabel#validationBadge {
+                background: #eaf4ff;
+                color: #0f67d8;
+                border: 1px solid #cfe4ff;
+                border-radius: 999px;
+                padding: 4px 9px;
+                font-size: 10px;
+                font-weight: 800;
+            }
+            QLabel#validationText {
+                color: #2c435b;
+                font-size: 12px;
+                line-height: 1.3;
+            }
+            QLabel#fieldLabel {
+                color: #4a5f75;
+                font-size: 11px;
+                font-weight: 800;
+            }
+            QComboBox, QLineEdit {
+                background: #ffffff;
+                color: #17283b;
+                border: 1px solid #cfdbe7;
+                border-radius: 8px;
+                padding: 9px 10px;
+                min-height: 18px;
+            }
+            QComboBox:focus, QLineEdit:focus {
+                border: 1px solid #0f67d8;
+            }
+            QCheckBox {
+                color: #52677d;
+                font-size: 11px;
+                spacing: 7px;
+            }
+            QPushButton {
+                background: #edf2f7;
+                color: #263b52;
+                border: 1px solid #d6e0ea;
+                border-radius: 8px;
+                padding: 9px 12px;
+                font-weight: 700;
+            }
+            QPushButton:hover {
+                background: #e3eaf1;
+            }
+            QPushButton#primaryButton {
+                background: #0f67d8;
+                color: #ffffff;
+                border: 1px solid #0f67d8;
+            }
+            QPushButton#primaryButton:hover {
+                background: #0c59bc;
+            }
+            QPushButton#secondaryButton {
+                background: #ffffff;
+                color: #0f67d8;
+                border: 1px solid #a9cdf7;
+            }
+            QPushButton#secondaryButton:hover {
+                background: #f1f7ff;
+            }
+            QPushButton#payButton {
+                background: #14945f;
+                color: #ffffff;
+                border: 1px solid #14945f;
+                font-size: 14px;
+                padding: 11px 14px;
+            }
+            QPushButton#payButton:hover {
+                background: #117c50;
+            }
+            QPushButton#dangerButton {
+                background: #fff7f7;
+                color: #a13d3d;
+                border: 1px solid #efcdcd;
+            }
+            QPushButton#dangerButton:hover {
+                background: #ffeded;
+            }
+            QPushButton:disabled {
+                background: #e7edf3;
+                color: #9aaaba;
+                border-color: #dde5ed;
+            }
+            QFrame#totalFrame {
+                background: #102a43;
+                border-radius: 11px;
+            }
+            QLabel#totalCaption {
+                background: transparent;
+                color: #c6d5e5;
+                font-size: 12px;
+                font-weight: 800;
+            }
+            QLabel#totalLabel {
+                background: transparent;
+                color: #ffffff;
+                font-size: 25px;
+                font-weight: 900;
+            }
+            QStatusBar {
+                background: #ffffff;
+                color: #5f7287;
+                border-top: 1px solid #dbe5ef;
+                font-size: 11px;
+            }
             """
         )
+
+    def _manager_hardware_status(self) -> dict[str, bool]:
+        return {
+            "camera": bool(self._camera_worker is not None and self._camera_thread is not None and self._camera_thread.isRunning()),
+            "rfid_a": self.rfid_simulation.isChecked() or self._serial_available,
+            "rfid_b": self.rfid_simulation.isChecked() or self._serial_available,
+        }
+
+    def _open_manager_dashboard(self) -> None:
+        dashboard = ManagerDashboardWindow(
+            self.cart,
+            lambda: self._last_frame,
+            self._manager_hardware_status,
+            self,
+        )
+        dashboard.show()
+        dashboard.raise_()
+        dashboard.activateWindow()
 
     def _load_products(self) -> None:
         selected_id = self.product_combo.currentData()
@@ -275,7 +626,7 @@ class MainWindow(QMainWindow):
         products = self.database.list_products()
         for product in products:
             self.product_combo.addItem(
-                f"{product.name} · {format_money(product.price_cents)} · stock {product.stock}",
+                f"{product.name} · {format_money(product.price_cents)} · disponible {product.stock}",
                 product.id,
             )
         if selected_id is not None:
@@ -302,8 +653,10 @@ class MainWindow(QMainWindow):
                 self.cart_table.setItem(row, column, cell)
         total = self.cart.total_cents
         self.total_label.setText(format_money(total))
+        units = sum(item.quantity for item in items)
+        noun = "producto" if units == 1 else "productos"
+        self.cart_summary_label.setText(f"{units} {noun}")
         self.pay_button.setEnabled(bool(items) and not self.fusion.blocked and not self._payment_open)
-        self.paypal_button.setEnabled(bool(items) and not self._payment_open)
         self.clear_button.setEnabled(bool(items or self.fusion.pending or self.fusion.issues or self.fusion.visual_notices) and not self._payment_open)
 
     @Slot()
@@ -330,7 +683,7 @@ class MainWindow(QMainWindow):
         candidates = [row["uid"] for row in rows if
                       (row["uid"] in self.fusion.present_uids) == (action == "SALIDA")]
         if len(candidates) != 1:
-            self.statusBar().showMessage("Indique el UID exacto en Probar trama; no se elige entre varias etiquetas", 6000)
+            self.statusBar().showMessage("Indique el UID exacto en Lectura manual; no se elige entre varias etiquetas", 6000)
             return
         self.serial_line_input.setText(f"{action}:{candidates[0]}")
         self._simulate_serial_line()
@@ -369,7 +722,7 @@ class MainWindow(QMainWindow):
         self._refresh_cart()
         answer = QMessageBox.question(
             self,
-            "Confirmar pago simulado",
+            "Confirmar pago",
             f"¿Aprobar el pago por {format_money(total)}?\n\n"
             "Al confirmar se registrará la venta y se descontará el inventario.",
         )
@@ -377,7 +730,7 @@ class MainWindow(QMainWindow):
         self._poll_fusion()
         self._refresh_cart()
         if answer != QMessageBox.StandardButton.Yes:
-            LOGGER.info("Pago simulado cancelado por el usuario")
+            LOGGER.info("Pago cancelado por el usuario")
             return
         if self.fusion.blocked or self.fusion.payment_revision != revision or self.cart.items != purchased_items:
             self.statusBar().showMessage("La compra cambió durante la confirmación; revise y confirme de nuevo", 6000)
@@ -391,41 +744,6 @@ class MainWindow(QMainWindow):
         self._load_products()
         self.statusBar().showMessage(f"Venta #{receipt.sale_id} aprobada", 5000)
         ReceiptDialog(receipt, purchased_items, self).exec()
-
-
-    @Slot()
-    def _show_paypal_demo(self) -> None:
-        if not self.cart.items:
-            self.statusBar().showMessage("Agregue productos antes de abrir PayPal DEMO", 4000)
-            return
-        PayPalDemoDialog(self.cart.total_cents, self).exec()
-
-    @Slot()
-    def _show_manager_dashboard(self) -> None:
-        if self._manager_window is None:
-            self._manager_window = ManagerDashboardWindow(
-                self.cart,
-                lambda: self._last_frame,
-                self._manager_hardware_status,
-                self,
-            )
-            self._manager_window.destroyed.connect(self._clear_manager_window)
-        self._manager_window.show()
-        self._manager_window.raise_()
-        self._manager_window.activateWindow()
-
-    @Slot()
-    def _clear_manager_window(self) -> None:
-        self._manager_window = None
-
-    def _manager_hardware_status(self) -> dict[str, bool]:
-        rfid_ok = bool(self.rfid_simulation.isChecked() or self._serial_available)
-        camera_ok = bool(self.fusion.available.get("vision", False) and self._last_frame is not None)
-        return {
-            "camera": camera_ok,
-            "rfid_a": rfid_ok,
-            "rfid_b": rfid_ok,
-        }
 
     def _selected_cart_product_id(self) -> int | None:
         row = self.cart_table.currentRow()
@@ -482,7 +800,7 @@ class MainWindow(QMainWindow):
 
     def _start_rfid(self) -> None:
         if not self.config.rfid_enabled:
-            self.rfid_status.setText("Arduino deshabilitado · use el modo de prueba para simular RFID")
+            self.rfid_status.setText("Arduino desconectado")
             return
         self._rfid_thread = QThread(self)
         self._rfid_worker = RfidSerialWorker(
@@ -519,7 +837,7 @@ class MainWindow(QMainWindow):
                 "Use el formato ENTRADA:UID o SALIDA:UID",
             )
             return
-        LOGGER.info("Trama RFID inyectada desde simulador: %s", event.raw_line)
+        LOGGER.info("Trama RFID procesada desde el modo manual: %s", event.raw_line)
         self.fusion.on_rfid(event)
         self.rfid_last_event.setText(self.fusion.message)
         self._refresh_fusion()
@@ -538,8 +856,6 @@ class MainWindow(QMainWindow):
         simulated = self.rfid_simulation.isChecked()
         self.fusion.invalidate("Cambio de modo RFID; repetir pendientes")
         self.fusion.set_available("rfid", simulated or self._serial_available)
-        for widget in (self.serial_line_input, self.serial_simulate_button):
-            widget.setEnabled(simulated)
         if self._inference_worker is not None:
             self._inference_worker.reset_crossings()
         self._refresh_fusion()
@@ -588,7 +904,7 @@ class MainWindow(QMainWindow):
     def _show_rfid_error(self, message: str) -> None:
         self._rfid_availability(False)
         LOGGER.error("RFID no disponible: %s", message)
-        self.rfid_status.setText(f"Arduino no disponible · {message}")
+        self.rfid_status.setText("Arduino desconectado")
 
     @Slot(QImage)
     def _show_frame(self, image: QImage) -> None:
@@ -659,8 +975,8 @@ class MainWindow(QMainWindow):
         inference_text = f"{float(inference):.1f}" if inference is not None else "—"
         latency_text = f"{float(latency):.0f} ms" if latency is not None else "—"
         self.performance_label.setText(
-            f"Captura {capture_text} FPS · YOLO {inference_text} FPS / "
-            f"{latency_text} · {device} · Texto ≤ {self.config.ui_update_fps:.0f} FPS"
+            f"Cámara {capture_text} FPS · Detección {inference_text} FPS · "
+            f"Latencia {latency_text} · {device}"
         )
 
     def closeEvent(self, event: QCloseEvent) -> None:

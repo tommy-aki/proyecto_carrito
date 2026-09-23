@@ -27,7 +27,7 @@ def main() -> int:
     application.setApplicationName("Carrito Smart")
     application.setOrganizationName("Prototipo académico")
     window = MainWindow(database, config)
-    window.show()
+    window.showMaximized()
     return application.exec()
 
 

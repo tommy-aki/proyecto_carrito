@@ -46,6 +46,13 @@ def crossing(window, action="ENTRADA", name="aluminum soda can", identity="one",
     )])
 
 
+def test_main_window_keeps_manager_button_and_clean_status_panel(window):
+    assert hasattr(window, "manager_button")
+    assert window.manager_button.text() == "Centro gerencial"
+    status = window.vision_cart_status.text().lower()
+    assert status and ("entrada" in status or "salida" in status or "visión" in status or "vision" in status)
+
+
 def rfid(window, line="ENTRADA:4A3B2C1D"):
     window.serial_line_input.setText(line)
     window._simulate_serial_line()

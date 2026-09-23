@@ -41,26 +41,38 @@ class ReceiptDialog(QDialog):
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(28, 24, 28, 24)
-        root.setSpacing(12)
+        root.setSpacing(14)
+
+        header = QWidget()
+        header.setObjectName("receiptHeader")
+        header_layout = QVBoxLayout(header)
+        header_layout.setContentsMargins(20, 18, 20, 18)
+        header_layout.setSpacing(6)
 
         check = QLabel("✓")
         check.setObjectName("successIcon")
         check.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        root.addWidget(check, alignment=Qt.AlignmentFlag.AlignHCenter)
+        header_layout.addWidget(check, alignment=Qt.AlignmentFlag.AlignHCenter)
 
         title = QLabel("¡Pago aprobado!")
         title.setObjectName("receiptTitle")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        root.addWidget(title)
+        header_layout.addWidget(title)
 
         subtitle = QLabel(
             f"Compra #{self.receipt.sale_id} registrada correctamente"
         )
         subtitle.setObjectName("receiptSubtitle")
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        root.addWidget(subtitle)
+        header_layout.addWidget(subtitle)
+        root.addWidget(header)
+
+        detail_title = QLabel("Resumen de compra")
+        detail_title.setObjectName("detailTitle")
+        root.addWidget(detail_title)
 
         self.items_table = QTableWidget(len(self.purchased_items), 4)
+        self.items_table.setObjectName("receiptTable")
         self.items_table.setHorizontalHeaderLabels(
             ["Producto", "Cant.", "Precio", "Subtotal"]
         )
@@ -70,6 +82,7 @@ class ReceiptDialog(QDialog):
         self.items_table.setSelectionMode(
             QAbstractItemView.SelectionMode.NoSelection
         )
+        self.items_table.setAlternatingRowColors(True)
         self.items_table.verticalHeader().setVisible(False)
         self.items_table.horizontalHeader().setSectionResizeMode(
             0, QHeaderView.ResizeMode.Stretch
@@ -97,6 +110,7 @@ class ReceiptDialog(QDialog):
         total_card = QWidget()
         total_card.setObjectName("receiptTotalCard")
         total_layout = QHBoxLayout(total_card)
+        total_layout.setContentsMargins(18, 13, 18, 13)
         total_caption = QLabel("TOTAL PAGADO")
         total_caption.setObjectName("totalCaption")
         total_value = QLabel(format_money(self.receipt.total_cents))
@@ -107,7 +121,7 @@ class ReceiptDialog(QDialog):
         root.addWidget(total_card)
 
         message = QLabel(
-            "Gracias por su compra. Puede retirar sus productos del carrito."
+            "Compra finalizada. Retire sus productos y cierre el carrito al terminar."
         )
         message.setObjectName("thanksMessage")
         message.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -122,24 +136,90 @@ class ReceiptDialog(QDialog):
     def _apply_styles(self) -> None:
         self.setStyleSheet(
             """
-            QDialog { background: #f8fafc; color: #17212b; }
+            QDialog {
+                background: #eef3f8;
+                color: #17283b;
+            }
+            QWidget#receiptHeader {
+                background: #ffffff;
+                border: 1px solid #dbe5ef;
+                border-radius: 14px;
+            }
             QLabel#successIcon {
-                background: #16a34a; color: white; border-radius: 30px;
-                min-width: 60px; max-width: 60px; min-height: 60px;
-                max-height: 60px; font-size: 38px; font-weight: 700;
+                background: #14945f;
+                color: #ffffff;
+                border-radius: 27px;
+                min-width: 54px;
+                max-width: 54px;
+                min-height: 54px;
+                max-height: 54px;
+                font-size: 32px;
+                font-weight: 800;
             }
-            QLabel#receiptTitle { color: #166534; font-size: 28px; font-weight: 800; }
-            QLabel#receiptSubtitle { color: #52667a; font-size: 15px; }
-            QTableWidget { background: white; border: 1px solid #cbd5e1; border-radius: 7px; }
-            QHeaderView::section { background: #e8edf2; border: none; padding: 8px; font-weight: 700; }
-            QWidget#receiptTotalCard { background: #102a43; border-radius: 8px; }
-            QLabel#totalCaption { background: transparent; color: #cbd5e1; font-weight: 700; }
-            QLabel#receiptTotal { background: transparent; color: white; font-size: 25px; font-weight: 800; }
-            QLabel#thanksMessage { color: #475569; }
+            QLabel#receiptTitle {
+                color: #116a47;
+                font-size: 26px;
+                font-weight: 900;
+            }
+            QLabel#receiptSubtitle {
+                color: #667b90;
+                font-size: 13px;
+            }
+            QLabel#detailTitle {
+                color: #102a43;
+                font-size: 15px;
+                font-weight: 800;
+            }
+            QTableWidget#receiptTable {
+                background: #ffffff;
+                alternate-background-color: #f8fafc;
+                color: #1f2f42;
+                border: 1px solid #dbe5ef;
+                border-radius: 10px;
+                gridline-color: #edf1f5;
+                outline: none;
+            }
+            QHeaderView::section {
+                background: #f3f6fa;
+                color: #4b6076;
+                border: none;
+                border-bottom: 1px solid #dbe5ef;
+                padding: 9px 8px;
+                font-size: 11px;
+                font-weight: 800;
+            }
+            QWidget#receiptTotalCard {
+                background: #102a43;
+                border-radius: 11px;
+            }
+            QLabel#totalCaption {
+                background: transparent;
+                color: #c6d5e5;
+                font-size: 12px;
+                font-weight: 800;
+            }
+            QLabel#receiptTotal {
+                background: transparent;
+                color: #ffffff;
+                font-size: 25px;
+                font-weight: 900;
+            }
+            QLabel#thanksMessage {
+                color: #52677d;
+                font-size: 12px;
+                padding: 2px 8px;
+            }
             QPushButton#newPurchaseButton {
-                background: #2563eb; color: white; border: none;
-                border-radius: 7px; padding: 12px; font-size: 16px; font-weight: 700;
+                background: #0f67d8;
+                color: #ffffff;
+                border: 1px solid #0f67d8;
+                border-radius: 9px;
+                padding: 12px;
+                font-size: 15px;
+                font-weight: 800;
             }
-            QPushButton#newPurchaseButton:hover { background: #1d4ed8; }
+            QPushButton#newPurchaseButton:hover {
+                background: #0c59bc;
+            }
             """
         )
