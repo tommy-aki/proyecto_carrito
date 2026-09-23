@@ -46,6 +46,8 @@ from carrito_smart.vision import (
     StableDetectionBuffer,
 )
 from carrito_smart.sensor_fusion import SensorFusionCoordinator
+from carrito_smart.manager_dashboard import ManagerDashboardWindow
+from carrito_smart.paypal_demo import PayPalDemoDialog
 
 
 LOGGER = logging.getLogger(__name__)
@@ -80,6 +82,7 @@ class MainWindow(QMainWindow):
         self._rfid_thread: QThread | None = None
         self._rfid_worker: RfidSerialWorker | None = None
         self._vision_metrics: dict[str, object] = {}
+        self._manager_window: ManagerDashboardWindow | None = None
 
         self.setWindowTitle("Carrito Smart · Prototipo")
         self.resize(1280, 760)
@@ -146,9 +149,15 @@ class MainWindow(QMainWindow):
         vision_panel.addWidget(self.vision_cart_status)
 
         cart_panel = QVBoxLayout()
+        cart_header = QHBoxLayout()
         cart_title = QLabel("Compra actual")
         cart_title.setObjectName("sectionTitle")
-        cart_panel.addWidget(cart_title)
+        cart_header.addWidget(cart_title)
+        cart_header.addStretch()
+        self.manager_button = QPushButton("Centro gerencial · DEMO")
+        self.manager_button.setObjectName("managerButton")
+        cart_header.addWidget(self.manager_button)
+        cart_panel.addLayout(cart_header)
 
         simulator = QGroupBox("Entrada: RFID + cámara · Salida: solo RFID")
         simulator_layout = QGridLayout(simulator)
@@ -209,9 +218,12 @@ class MainWindow(QMainWindow):
 
         actions = QHBoxLayout()
         self.clear_button = QPushButton("Cancelar compra")
+        self.paypal_button = QPushButton("PayPal · DEMO")
+        self.paypal_button.setObjectName("paypalButton")
         self.pay_button = QPushButton("Simular pago aprobado")
         self.pay_button.setObjectName("payButton")
         actions.addWidget(self.clear_button)
+        actions.addWidget(self.paypal_button)
         actions.addWidget(self.pay_button, 1)
         cart_panel.addLayout(actions)
 
@@ -228,6 +240,8 @@ class MainWindow(QMainWindow):
         self.serial_simulate_button.clicked.connect(self._simulate_serial_line)
         self.serial_line_input.returnPressed.connect(self._simulate_serial_line)
         self.clear_button.clicked.connect(self._clear_cart)
+        self.paypal_button.clicked.connect(self._show_paypal_demo)
+        self.manager_button.clicked.connect(self._show_manager_dashboard)
         self.pay_button.clicked.connect(self._pay)
         self.cart_table.itemSelectionChanged.connect(self._sync_combo_to_selection)
         self.rfid_simulation.toggled.connect(self._simulation_changed)
@@ -248,6 +262,10 @@ class MainWindow(QMainWindow):
             QPushButton#primaryButton { background: #2563eb; color: white; }
             QPushButton#primaryButton:hover { background: #1d4ed8; }
             QPushButton#payButton { background: #16a34a; color: white; font-size: 15px; }
+            QPushButton#managerButton { background: #102a43; color: white; padding: 8px 12px; }
+            QPushButton#managerButton:hover { background: #173f63; }
+            QPushButton#paypalButton { background: #0070ba; color: white; padding: 10px 12px; }
+            QPushButton#paypalButton:hover { background: #005ea6; }
             QPushButton#payButton:hover { background: #15803d; }
             QPushButton:disabled { background: #cbd5e1; color: #64748b; }
             QPushButton#payButton:disabled, QPushButton#primaryButton:disabled { background: #cbd5e1; color: #64748b; }
@@ -292,6 +310,7 @@ class MainWindow(QMainWindow):
         total = self.cart.total_cents
         self.total_label.setText(format_money(total))
         self.pay_button.setEnabled(bool(items) and not self.fusion.blocked and not self._payment_open)
+        self.paypal_button.setEnabled(bool(items) and not self._payment_open)
         self.clear_button.setEnabled(bool(items or self.fusion.pending or self.fusion.issues or self.fusion.visual_notices) and not self._payment_open)
 
     @Slot()
@@ -379,6 +398,41 @@ class MainWindow(QMainWindow):
         self._load_products()
         self.statusBar().showMessage(f"Venta #{receipt.sale_id} aprobada", 5000)
         ReceiptDialog(receipt, purchased_items, self).exec()
+
+
+    @Slot()
+    def _show_paypal_demo(self) -> None:
+        if not self.cart.items:
+            self.statusBar().showMessage("Agregue productos antes de abrir PayPal DEMO", 4000)
+            return
+        PayPalDemoDialog(self.cart.total_cents, self).exec()
+
+    @Slot()
+    def _show_manager_dashboard(self) -> None:
+        if self._manager_window is None:
+            self._manager_window = ManagerDashboardWindow(
+                self.cart,
+                lambda: self._last_frame,
+                self._manager_hardware_status,
+                self,
+            )
+            self._manager_window.destroyed.connect(self._clear_manager_window)
+        self._manager_window.show()
+        self._manager_window.raise_()
+        self._manager_window.activateWindow()
+
+    @Slot()
+    def _clear_manager_window(self) -> None:
+        self._manager_window = None
+
+    def _manager_hardware_status(self) -> dict[str, bool]:
+        rfid_ok = bool(self.rfid_simulation.isChecked() or self._serial_available)
+        camera_ok = bool(self.fusion.available.get("vision", False) and self._last_frame is not None)
+        return {
+            "camera": camera_ok,
+            "rfid_a": rfid_ok,
+            "rfid_b": rfid_ok,
+        }
 
     def _selected_cart_product_id(self) -> int | None:
         row = self.cart_table.currentRow()
