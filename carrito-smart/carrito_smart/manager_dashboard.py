@@ -774,6 +774,7 @@ class ManagerDashboardWindow(QMainWindow):
 
 _MANAGER_STYLE = """
 QMainWindow, QWidget { background: #f4f7fb; color: #132238; font-family: "Segoe UI"; font-size: 14px; }
+QLabel { background: transparent; }
 QFrame#sidebar { background: #101b2d; }
 QLabel#brand { color: white; font-size: 24px; font-weight: 800; letter-spacing: 1px; }
 QLabel#brandSub { color: #7f93b2; font-size: 11px; font-weight: 700; }
@@ -814,6 +815,7 @@ QLabel#alertCount { background: #ffe5e2; color: #b73d33; border-radius: 10px; pa
 
 _DIALOG_STYLE = """
 QDialog, QWidget { background: #f5f8fc; color: #14233a; font-family: "Segoe UI"; font-size: 14px; }
+QLabel { background: transparent; }
 QLabel#dialogTitle { font-size: 25px; font-weight: 800; }
 QLabel#muted { color: #6a788c; }
 QLabel#statusBadge { background: #e2f6eb; color: #18774f; border-radius: 9px; padding: 7px 10px; font-weight: 750; }

@@ -163,13 +163,8 @@ class MainWindow(QMainWindow):
         simulator_layout = QGridLayout(simulator)
         self.product_combo = QComboBox()
         self.product_combo.setMinimumWidth(320)
-        self.add_button = QPushButton("Simular RFID entrada")
-        self.add_button.setObjectName("primaryButton")
-        self.remove_button = QPushButton("Simular RFID salida")
         simulator_layout.addWidget(QLabel("Producto"), 0, 0, 1, 2)
         simulator_layout.addWidget(self.product_combo, 1, 0, 1, 2)
-        simulator_layout.addWidget(self.add_button, 2, 0)
-        simulator_layout.addWidget(self.remove_button, 2, 1)
         self.rfid_status = QLabel("Arduino: inicializando…")
         self.rfid_status.setStyleSheet("color: #52667a; font-size: 12px;")
         simulator_layout.addWidget(self.rfid_status, 3, 0, 1, 2)
@@ -235,8 +230,6 @@ class MainWindow(QMainWindow):
         root.addWidget(right_widget, 2)
         self.setCentralWidget(central)
 
-        self.add_button.clicked.connect(self._simulate_entry)
-        self.remove_button.clicked.connect(self._simulate_exit)
         self.serial_simulate_button.clicked.connect(self._simulate_serial_line)
         self.serial_line_input.returnPressed.connect(self._simulate_serial_line)
         self.clear_button.clicked.connect(self._clear_cart)
@@ -545,7 +538,7 @@ class MainWindow(QMainWindow):
         simulated = self.rfid_simulation.isChecked()
         self.fusion.invalidate("Cambio de modo RFID; repetir pendientes")
         self.fusion.set_available("rfid", simulated or self._serial_available)
-        for widget in (self.add_button, self.remove_button, self.serial_line_input, self.serial_simulate_button):
+        for widget in (self.serial_line_input, self.serial_simulate_button):
             widget.setEnabled(simulated)
         if self._inference_worker is not None:
             self._inference_worker.reset_crossings()
